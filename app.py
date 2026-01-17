@@ -1,0 +1,229 @@
+"""Main application entry point for Resume AI."""
+
+import os
+import streamlit as st
+from dotenv import load_dotenv
+
+from models import UserInput, JobRequirements, CompanyInfo, WorkExperience, Education, Skill
+from orchestrator import AgentOrchestrator
+from ui import render_input_form, validate_user_input, validate_job_requirements, display_results, display_improvement_form
+from pdf import PDFGenerator
+from rag import VectorStore, DocumentManager
+
+# Load environment variables
+load_dotenv()
+
+# Configure Streamlit page
+st.set_page_config(
+    page_title="AI職務経歴書生成システム",
+    page_icon="📄",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# Initialize session state
+if "resume_generated" not in st.session_state:
+    st.session_state.resume_generated = False
+if "current_resume" not in st.session_state:
+    st.session_state.current_resume = None
+if "results" not in st.session_state:
+    st.session_state.results = None
+if "user_input_obj" not in st.session_state:
+    st.session_state.user_input_obj = None
+if "job_requirements_obj" not in st.session_state:
+    st.session_state.job_requirements_obj = None
+
+
+def main():
+    """Main application function."""
+    
+    # Sidebar
+    with st.sidebar:
+        st.title("📋 メニュー")
+        st.markdown("---")
+        
+        st.markdown("### 使い方")
+        st.markdown("""
+        1. 個人情報・経歴を入力
+        2. 応募する求人情報を入力
+        3. 「職務経歴書を生成」をクリック
+        4. 生成された職務経歴書を確認
+        5. 必要に応じて改善フィードバックを入力
+        """)
+        
+        st.markdown("---")
+        st.markdown("### 設定")
+        
+        # Check for OpenAI API key
+        api_key = os.getenv("OPENAI_API_KEY")
+        if api_key:
+            st.success("✅ OpenAI API キーが設定されています")
+        else:
+            st.error("❌ OpenAI API キーが設定されていません")
+            st.markdown("`.env`ファイルに`OPENAI_API_KEY`を設定してください")
+        
+        st.markdown("---")
+        if st.button("🔄 リセット", help="入力内容と生成結果をリセットします"):
+            st.session_state.resume_generated = False
+            st.session_state.current_resume = None
+            st.session_state.results = None
+            st.session_state.user_input_obj = None
+            st.session_state.job_requirements_obj = None
+            st.rerun()
+    
+    # Check API key before proceeding
+    if not os.getenv("OPENAI_API_KEY"):
+        st.error("⚠️ OpenAI API キーが設定されていません。サイドバーの設定を確認してください。")
+        st.stop()
+    
+    # Main content
+    if not st.session_state.resume_generated:
+        # Input form
+        form_data = render_input_form()
+        
+        st.markdown("---")
+        
+        # Generate button
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            generate_button = st.button("🚀 職務経歴書を生成", type="primary", use_container_width=True)
+        
+        if generate_button:
+            # Validate inputs
+            user_valid, user_errors = validate_user_input(form_data["user_input"])
+            job_valid, job_errors = validate_job_requirements(form_data["job_requirements"])
+            
+            if not user_valid:
+                st.error("❌ 個人情報・経歴の入力に問題があります:")
+                for error in user_errors:
+                    st.error(f"• {error}")
+                st.stop()
+            
+            if not job_valid:
+                st.error("❌ 求人情報の入力に問題があります:")
+                for error in job_errors:
+                    st.error(f"• {error}")
+                st.stop()
+            
+            # Convert to Pydantic models
+            try:
+                user_input = UserInput(
+                    name=form_data["user_input"]["name"],
+                    email=form_data["user_input"]["email"],
+                    phone=form_data["user_input"].get("phone"),
+                    summary=form_data["user_input"].get("summary"),
+                    work_experiences=[WorkExperience(**exp) for exp in form_data["user_input"]["work_experiences"]],
+                    education=[Education(**edu) for edu in form_data["user_input"]["education"]],
+                    skills=[Skill(**skill) for skill in form_data["user_input"]["skills"]],
+                    certifications=form_data["user_input"].get("certifications", []),
+                    languages=form_data["user_input"].get("languages", []),
+                )
+                
+                job_requirements = JobRequirements(
+                    job_title=form_data["job_requirements"]["job_title"],
+                    company_info=CompanyInfo(**form_data["job_requirements"]["company_info"]),
+                    job_description=form_data["job_requirements"]["job_description"],
+                    required_skills=form_data["job_requirements"].get("required_skills", []),
+                    preferred_skills=form_data["job_requirements"].get("preferred_skills", []),
+                    responsibilities=form_data["job_requirements"].get("responsibilities", []),
+                    qualifications=form_data["job_requirements"].get("qualifications", []),
+                )
+                
+                st.session_state.user_input_obj = user_input
+                st.session_state.job_requirements_obj = job_requirements
+                
+            except Exception as e:
+                st.error(f"❌ データ変換エラー: {str(e)}")
+                st.stop()
+            
+            # Generate resume
+            with st.spinner("職務経歴書を生成中... (1-2分程度かかります)"):
+                try:
+                    # Initialize orchestrator
+                    orchestrator = AgentOrchestrator()
+                    
+                    # Generate resume
+                    results = orchestrator.generate_resume(user_input, job_requirements)
+                    
+                    # Store in session state
+                    st.session_state.results = results
+                    st.session_state.current_resume = results["resume_markdown"]
+                    st.session_state.resume_generated = True
+                    
+                    # Optional: Store in RAG for future reference
+                    try:
+                        vector_store = VectorStore()
+                        doc_manager = DocumentManager(vector_store)
+                        
+                        # Store job application context
+                        doc_manager.store_job_application_context(
+                            job_id=f"{job_requirements.company_info.name}_{job_requirements.job_title}",
+                            job_description=job_requirements.job_description,
+                            company_name=job_requirements.company_info.name,
+                            company_info=str(job_requirements.company_info),
+                        )
+                    except Exception as e:
+                        # RAG storage is optional, don't fail if it errors
+                        print(f"Warning: Could not store in RAG: {e}")
+                    
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"❌ 生成中にエラーが発生しました: {str(e)}")
+                    st.exception(e)
+    
+    else:
+        # Display results
+        display_results(st.session_state.results, st.session_state.current_resume)
+        
+        # PDF download
+        st.markdown("---")
+        st.markdown("### 📥 PDF出力")
+        
+        col1, col2 = st.columns([2, 1])
+        with col1:
+            st.info("PDFファイルとしてダウンロードすることもできます")
+        with col2:
+            if st.button("PDF生成", type="secondary", use_container_width=True):
+                try:
+                    with st.spinner("PDFを生成中..."):
+                        pdf_generator = PDFGenerator()
+                        output_path = "/tmp/resume.pdf"
+                        pdf_generator.markdown_to_pdf(st.session_state.current_resume, output_path)
+                        
+                        with open(output_path, "rb") as f:
+                            pdf_bytes = f.read()
+                        
+                        st.download_button(
+                            label="📥 PDFをダウンロード",
+                            data=pdf_bytes,
+                            file_name="resume.pdf",
+                            mime="application/pdf",
+                        )
+                except Exception as e:
+                    st.error(f"❌ PDF生成エラー: {str(e)}")
+        
+        # Improvement form
+        feedback = display_improvement_form(st.session_state.current_resume)
+        
+        if feedback and st.button("🔄 改善版を生成", type="primary"):
+            with st.spinner("改善版を生成中..."):
+                try:
+                    orchestrator = AgentOrchestrator()
+                    improved_resume = orchestrator.improve_resume(
+                        current_resume=st.session_state.current_resume,
+                        feedback=feedback,
+                        user_input=st.session_state.user_input_obj,
+                        job_requirements=st.session_state.job_requirements_obj,
+                    )
+                    
+                    st.session_state.current_resume = improved_resume
+                    st.success("✅ 改善版の生成が完了しました！")
+                    st.rerun()
+                    
+                except Exception as e:
+                    st.error(f"❌ 改善版生成エラー: {str(e)}")
+
+
+if __name__ == "__main__":
+    main()
