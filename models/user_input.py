@@ -4,43 +4,31 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 
-class WorkExperience(BaseModel):
-    """Work experience entry."""
+class PersonalProject(BaseModel):
+    """Personal project entry."""
     
-    company: str = Field(..., description="Company name")
-    position: str = Field(..., description="Job position/title")
-    start_date: str = Field(..., description="Start date")
-    end_date: Optional[str] = Field(None, description="End date (None if current)")
-    description: str = Field(..., description="Job description and achievements")
+    title: str = Field(..., description="Project title")
+    description: str = Field(..., description="Project description")
     technologies: List[str] = Field(default_factory=list, description="Technologies used")
-
-
-class Education(BaseModel):
-    """Education entry."""
-    
-    institution: str = Field(..., description="Educational institution name")
-    degree: str = Field(..., description="Degree or qualification")
-    field: str = Field(..., description="Field of study")
-    graduation_date: str = Field(..., description="Graduation date")
-    gpa: Optional[str] = Field(None, description="GPA if applicable")
-
-
-class Skill(BaseModel):
-    """Skill entry."""
-    
-    category: str = Field(..., description="Skill category (e.g., Programming, Languages)")
-    items: List[str] = Field(..., description="List of skills in this category")
+    url: Optional[str] = Field(None, description="Project URL (GitHub, portfolio, etc.)")
+    date: Optional[str] = Field(None, description="Project completion date or period")
 
 
 class UserInput(BaseModel):
     """User input data model."""
     
+    # Basic Information
     name: str = Field(..., description="Full name")
-    email: str = Field(..., description="Email address")
-    phone: Optional[str] = Field(None, description="Phone number")
-    summary: Optional[str] = Field(None, description="Professional summary")
-    work_experiences: List[WorkExperience] = Field(default_factory=list)
-    education: List[Education] = Field(default_factory=list)
-    skills: List[Skill] = Field(default_factory=list)
-    certifications: List[str] = Field(default_factory=list)
-    languages: List[str] = Field(default_factory=list)
+    residence: Optional[str] = Field(None, description="Residence (e.g., 神奈川県在住)")
+    job_title: Optional[str] = Field(None, description="Job title (e.g., バックエンドエンジニア)")
+    years_of_experience: Optional[str] = Field(None, description="Years of experience (e.g., 15年間)")
+    
+    # Skills
+    programming_languages: List[str] = Field(default_factory=list, description="Programming languages")
+    frameworks: List[str] = Field(default_factory=list, description="Frameworks and libraries")
+    testing_tools: List[str] = Field(default_factory=list, description="Testing tools")
+    design_tools: List[str] = Field(default_factory=list, description="Design tools")
+    
+    # Personal Projects
+    personal_projects: List[PersonalProject] = Field(default_factory=list, description="Personal development projects")
+    portfolio_url: Optional[str] = Field(None, description="Portfolio or GitHub URL")

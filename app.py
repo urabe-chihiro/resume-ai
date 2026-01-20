@@ -2,16 +2,30 @@
 
 import os
 import streamlit as st
+import logging
 from dotenv import load_dotenv
 
-from models import UserInput, JobRequirements, CompanyInfo, WorkExperience, Education, Skill
+from models import UserInput, JobRequirements, CompanyInfo, PersonalProject
 from orchestrator import AgentOrchestrator
 from ui import render_input_form, validate_user_input, validate_job_requirements, display_results, display_improvement_form
-from pdf import PDFGenerator
+from pdf.skill_sheet_generator import SkillSheetGenerator
 from rag import VectorStore, DocumentManager
+from db import FormDataManager
 
 # Load environment variables
 load_dotenv()
+
+# Configure logging for OpenAI
+logger = logging.getLogger("openai")
+logger.setLevel(logging.DEBUG)
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setLevel(logging.DEBUG)
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
 
 # Configure Streamlit page
 st.set_page_config(
@@ -109,14 +123,15 @@ def main():
             try:
                 user_input = UserInput(
                     name=form_data["user_input"]["name"],
-                    email=form_data["user_input"]["email"],
-                    phone=form_data["user_input"].get("phone"),
-                    summary=form_data["user_input"].get("summary"),
-                    work_experiences=[WorkExperience(**exp) for exp in form_data["user_input"]["work_experiences"]],
-                    education=[Education(**edu) for edu in form_data["user_input"]["education"]],
-                    skills=[Skill(**skill) for skill in form_data["user_input"]["skills"]],
-                    certifications=form_data["user_input"].get("certifications", []),
-                    languages=form_data["user_input"].get("languages", []),
+                    residence=form_data["user_input"].get("residence"),
+                    job_title=form_data["user_input"].get("job_title"),
+                    years_of_experience=form_data["user_input"].get("years_of_experience"),
+                    programming_languages=form_data["user_input"].get("programming_languages", []),
+                    frameworks=form_data["user_input"].get("frameworks", []),
+                    testing_tools=form_data["user_input"].get("testing_tools", []),
+                    design_tools=form_data["user_input"].get("design_tools", []),
+                    personal_projects=form_data["user_input"].get("personal_projects", []),
+                    portfolio_url=form_data["user_input"].get("portfolio_url"),
                 )
                 
                 job_requirements = JobRequirements(
@@ -132,6 +147,15 @@ def main():
                 st.session_state.user_input_obj = user_input
                 st.session_state.job_requirements_obj = job_requirements
                 
+                # Save form data to database
+                try:
+                    db_manager = FormDataManager()
+                    db_manager.save_user_input(form_data["user_input"])
+                    db_manager.save_job_requirements(form_data["job_requirements"])
+                except Exception as db_error:
+                    # Database save is optional, don't fail if it errors
+                    print(f"Warning: Could not save form data to database: {db_error}")
+                
             except Exception as e:
                 st.error(f"❌ データ変換エラー: {str(e)}")
                 st.stop()
@@ -144,6 +168,18 @@ def main():
                     
                     # Generate resume
                     results = orchestrator.generate_resume(user_input, job_requirements)
+                    
+                    # Generate professional summary based on appeal points, skills, and personal projects
+                    summary = orchestrator.generate_summary(
+                        user_input,
+                        job_requirements,
+                        results["company_analysis"],
+                        results["requirements_analysis"],
+                    )
+                    results["generated_summary"] = summary
+                    
+                    # Add summary to structured resume data
+                    results["resume_data"]["summary"] = summary
                     
                     # Store in session state
                     st.session_state.results = results
@@ -187,13 +223,21 @@ def main():
             if st.button("PDF生成", type="secondary", use_container_width=True):
                 try:
                     with st.spinner("PDFを生成中..."):
-                        pdf_generator = PDFGenerator()
-                        output_path = "/tmp/resume.pdf"
-                        pdf_generator.markdown_to_pdf(st.session_state.current_resume, output_path)
+                        import time
+                        pdf_generator = SkillSheetGenerator()
+                        # Use timestamp to avoid caching
+                        output_path = f"/tmp/resume_{int(time.time())}.pdf"
+                        
+                        # Use structured data if available, otherwise fall back to markdown
+                        if "resume_data" in st.session_state.results:
+                            pdf_generator.data_to_pdf(st.session_state.results["resume_data"], output_path)
+                        else:
+                            pdf_generator.markdown_to_pdf(st.session_state.current_resume, output_path)
                         
                         with open(output_path, "rb") as f:
                             pdf_bytes = f.read()
                         
+                        st.success("✅ PDF生成完了！")
                         st.download_button(
                             label="📥 PDFをダウンロード",
                             data=pdf_bytes,
@@ -202,6 +246,9 @@ def main():
                         )
                 except Exception as e:
                     st.error(f"❌ PDF生成エラー: {str(e)}")
+                    import traceback
+                    st.error(traceback.format_exc())
+                    st.warning("💡 ヒント: 生成AI からのデータ形式が正しいか確認してください。")
         
         # Improvement form
         feedback = display_improvement_form(st.session_state.current_resume)

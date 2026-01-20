@@ -4,6 +4,93 @@ import streamlit as st
 from typing import Dict, Any
 
 
+def display_structured_preview(resume_data: Dict[str, Any]) -> None:
+    """Display structured resume data as formatted preview.
+    
+    Args:
+        resume_data: Structured resume data dictionary
+    """
+    # 1. 個人情報セクション
+    st.markdown("## 個人情報")
+    
+    header_info = []
+    if resume_data.get("name"):
+        header_info.append(f"**{resume_data['name']}**")
+    if resume_data.get("job_title"):
+        header_info.append(f"**{resume_data['job_title']}**")
+    if header_info:
+        st.markdown(" | ".join(header_info))
+    
+    contact_info = []
+    if resume_data.get("residence"):
+        contact_info.append(f"📍 {resume_data['residence']}")
+    if resume_data.get("years_of_experience"):
+        contact_info.append(f"📅 {resume_data['years_of_experience']}")
+    if contact_info:
+        st.markdown(" | ".join(contact_info))
+    
+    st.markdown("---")
+    
+    # 2. サマリー（職務要約）セクション - LLMで生成されたもの
+    if resume_data.get("summary"):
+        st.markdown(resume_data["summary"])
+        st.markdown("")
+    
+    st.markdown("---")
+    
+    # 3. スキルセット
+    st.markdown("## スキルセット")
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        if resume_data.get("programming_languages"):
+            langs = "、".join(resume_data["programming_languages"])
+            st.markdown(f"**プログラミング言語:** {langs}")
+        
+        if resume_data.get("frameworks"):
+            fws = "、".join(resume_data["frameworks"])
+            st.markdown(f"**フレームワーク:** {fws}")
+    
+    with col2:
+        if resume_data.get("testing_tools"):
+            tools = "、".join(resume_data["testing_tools"])
+            st.markdown(f"**テストツール:** {tools}")
+        
+        if resume_data.get("design_tools"):
+            design = "、".join(resume_data["design_tools"])
+            st.markdown(f"**デザインツール:** {design}")
+    
+    st.markdown("")
+    
+    # 4. 個人開発の成果物
+    if resume_data.get("personal_projects") and len(resume_data["personal_projects"]) > 0:
+        st.markdown("---")
+        st.markdown("## 個人開発")
+        
+        for project in resume_data["personal_projects"]:
+            if project.get("title"):
+                st.markdown(f"### {project['title']}")
+                
+                if project.get("date"):
+                    st.markdown(f"**期間:** {project['date']}")
+                
+                if project.get("description"):
+                    st.markdown(project["description"])
+                
+                if project.get("technologies"):
+                    tech_str = "、".join(project["technologies"])
+                    st.markdown(f"**使用技術:** {tech_str}")
+                
+                if project.get("url"):
+                    st.markdown(f"[プロジェクトリンク]({project['url']})")
+                
+                st.markdown("")
+        
+        if resume_data.get("portfolio_url"):
+            st.markdown(f"**ポートフォリオ:** [{resume_data['portfolio_url']}]({resume_data['portfolio_url']})")
+
+
 def display_results(results: Dict[str, Any], resume_markdown: str) -> None:
     """Display generation results.
     
@@ -18,19 +105,13 @@ def display_results(results: Dict[str, Any], resume_markdown: str) -> None:
     
     with tab1:
         st.markdown("### 職務経歴書プレビュー")
-        st.markdown(resume_markdown)
         
-        st.markdown("---")
-        st.markdown("### ダウンロード")
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button(
-                label="📥 Markdownをダウンロード",
-                data=resume_markdown,
-                file_name="resume.md",
-                mime="text/markdown",
-            )
+        # Display structured data preview if available
+        if "resume_data" in results:
+            display_structured_preview(results["resume_data"])
+        else:
+            # Fallback to markdown
+            st.markdown(resume_markdown)
     
     with tab2:
         st.markdown("### 企業分析")

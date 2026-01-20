@@ -1,5 +1,5 @@
 """PDF generation from Markdown."""
 
-from .pdf_generator import PDFGenerator
+from .skill_sheet_generator import SkillSheetGenerator
 
-__all__ = ["PDFGenerator"]
+__all__ = ["SkillSheetGenerator"]

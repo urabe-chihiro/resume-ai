@@ -2,7 +2,7 @@
 
 from abc import ABC, abstractmethod
 from typing import Dict, Any
-from langchain.llms.base import BaseLLM
+from langchain_core.language_models import BaseLLM
 from langchain_openai import ChatOpenAI
 
 
@@ -16,8 +16,10 @@ class BaseAgent(ABC):
             llm: Language model to use
             temperature: Temperature for generation
         """
-        self.llm = llm or ChatOpenAI(temperature=temperature, model="gpt-4")
+        self.llm = llm or ChatOpenAI(temperature=temperature, model="gpt-4o-mini")
     
+    # サブクラス（CompanyAnalysisAgent など）が run() メソッドを実装することを強制して、
+    # 全エージェントが同じインターフェースを持つようにしてい
     @abstractmethod
     def run(self, input_data: Dict[str, Any]) -> Dict[str, Any]:
         """Run the agent.
@@ -28,7 +30,7 @@ class BaseAgent(ABC):
         Returns:
             Output data from the agent
         """
-        pass
+        pass # 実装がない（親クラスでは処理を書かない）
     
     def _format_prompt(self, template: str, **kwargs) -> str:
         """Format a prompt template with variables.
