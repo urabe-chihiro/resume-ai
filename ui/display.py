@@ -33,7 +33,8 @@ def display_structured_preview(resume_data: Dict[str, Any]) -> None:
     
     # 2. アピールポイント - LLMで生成されたもの（タイトルなし）
     if resume_data.get("summary"):
-        st.markdown(resume_data["summary"])
+        # Display summary with preserved line breaks for proper paragraph formatting
+        st.write(resume_data["summary"])
         st.markdown("")
     
     st.markdown("---")

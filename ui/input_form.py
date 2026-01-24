@@ -3,7 +3,6 @@
 import streamlit as st
 from typing import Dict, Any
 from models import UserInput, PersonalProject, JobRequirements, CompanyInfo
-from db import FormDataManager
 
 
 def render_input_form() -> Dict[str, Any]:
@@ -36,26 +35,8 @@ def render_input_form() -> Dict[str, Any]:
 
 def _render_user_input_form() -> Dict[str, Any]:
     """Render user input form."""
-    # First, check if data exists in session state (from current session)
-    if st.session_state.form_user_data:
-        previous_data = st.session_state.form_user_data
-        print(f"DEBUG: Loaded form_user_data from session_state with keys: {list(previous_data.keys())}")
-    else:
-        # If not in session state, load from database (first visit or new session)
-        db_manager = FormDataManager()
-        previous_data = db_manager.get_latest_user_input()
-        
-        # Debug: Print loaded data
-        if previous_data:
-            print(f"DEBUG: Loaded previous_data from database with keys: {list(previous_data.keys())}")
-            if "work_experiences" in previous_data:
-                print(f"DEBUG: work_experiences loaded: {len(previous_data.get('work_experiences', []))} items")
-        else:
-            print("DEBUG: No previous_data found")
-        
-        # Store in session state for future reference within this session
-        if previous_data:
-            st.session_state.form_user_data = previous_data
+    # Use data from session state (cached in current session)
+    previous_data = st.session_state.form_user_data if st.session_state.form_user_data else {}
     
     st.header("基本情報")
     
@@ -228,19 +209,8 @@ def _render_user_input_form() -> Dict[str, Any]:
 
 def _render_job_requirements_form() -> Dict[str, Any]:
     """Render job requirements form."""
-    # First, check if data exists in session state (from current session)
-    if st.session_state.form_job_data:
-        previous_data = st.session_state.form_job_data
-        print(f"DEBUG: Loaded form_job_data from session_state with keys: {list(previous_data.keys())}")
-    else:
-        # If not in session state, load from database (first visit or new session)
-        db_manager = FormDataManager()
-        previous_data = db_manager.get_latest_job_requirements()
-        
-        # Store in session state for future reference within this session
-        if previous_data:
-            st.session_state.form_job_data = previous_data
-            print(f"DEBUG: Loaded job_requirements from database")
+    # Use data from session state (cached in current session)
+    previous_data = st.session_state.form_job_data if st.session_state.form_job_data else {}
     
     st.header("企業情報")
     

@@ -10,7 +10,6 @@ from orchestrator import AgentOrchestrator
 from ui import render_input_form, validate_user_input, validate_job_requirements, display_results, display_improvement_form
 from pdf.skill_sheet_generator import SkillSheetGenerator
 from rag import VectorStore, DocumentManager
-from db import FormDataManager
 
 # Load environment variables
 load_dotenv()
@@ -57,11 +56,82 @@ if "do_upgrade_input" not in st.session_state:
 if "do_regenerate_suggestions" not in st.session_state:
     st.session_state.do_regenerate_suggestions = False
 
-# Initialize form data in session state
+# Initialize form data in session state with dummy data for testing
 if "form_user_data" not in st.session_state:
-    st.session_state.form_user_data = {}
+    st.session_state.form_user_data = {
+        "name": "田中太郎",
+        "residence": "東京都渋谷区",
+        "job_title": "バックエンドエンジニア",
+        "years_of_experience": "8年",
+        "appeal_points": "マイクロサービスアーキテクチャの設計・実装に精通しており、大規模システムのスケーラビリティ改善を主導。チームリーダーとしてのプロジェクト推進能力に定評があります。",
+        "programming_languages": ["Python", "Go", "TypeScript", "SQL"],
+        "frameworks": ["FastAPI", "Django", "gRPC", "React"],
+        "testing_tools": ["pytest", "Jest", "unittest"],
+        "design_tools": ["Figma"],
+        "work_experiences": [
+            {
+                "company_name": "テック企業A",
+                "position": "シニアバックエンドエンジニア",
+                "period": "2020年4月～2023年3月",
+                "description": "マイクロサービスアーキテクチャへの移行を主導。レイテンシを30%削減し、スケーラビリティを3倍向上。3名のチームをリード。"
+            },
+            {
+                "company_name": "テック企業B",
+                "position": "バックエンドエンジニア",
+                "period": "2016年4月～2020年3月",
+                "description": "ECプラットフォームの構築に従事。日次100万トランザクション処理する決済システムを実装。"
+            }
+        ],
+        "personal_projects": [
+            {
+                "title": "AI職務経歴書生成システム",
+                "description": "応募する職務経歴書を自動生成するWebアプリケーション。LangChainとOpenAI APIを使用。",
+                "technologies": ["Python", "FastAPI", "OpenAI", "LangChain", "Streamlit"],
+                "date": "2024年",
+                "url": "https://github.com/example/resume-ai"
+            }
+        ],
+        "portfolio_url": "https://github.com/tanaka"
+    }
+
 if "form_job_data" not in st.session_state:
-    st.session_state.form_job_data = {}
+    st.session_state.form_job_data = {
+        "job_title": "バックエンドエンジニア（シニア）",
+        "company_info": {
+            "name": "NexaFlow Inc.",
+            "industry": "AI / クラウドプラットフォーム",
+            "size": "250-400名",
+            "culture": "次世代技術を先導する文化。エンジニアの自主性を尊重し、新しい挑戦を応援。フラットな組織構造。",
+            "values": ["イノベーション", "技術的卓越", "チャレンジ精神", "継続改善"]
+        },
+        "job_description": "Goを使用した大規模分散システムの設計・開発を行うシニアバックエンドエンジニアを募集しています。現在、マイクロサービスアーキテクチャへの移行を進めており、スケーラブルで信頼性の高いシステムを構築できるエンジニアを探しています。",
+        "required_skills": [
+            "バックエンド開発の実務経験5年以上",
+            "Go言語での開発経験",
+            "マイクロサービスアーキテクチャの理解",
+            "データベース設計の経験（MySQL、PostgreSQL等）",
+            "分散システムの基礎知識"
+        ],
+        "preferred_skills": [
+            "Kubernetesでのコンテナ運用経験",
+            "gRPCやProtocol Buffersの使用経験",
+            "AWS、GCP等のクラウドプラットフォーム経験",
+            "チームリーダーまたはアーキテクト経験",
+            "オープンソースプロジェクトへの貢献"
+        ],
+        "responsibilities": [
+            "バックエンドシステムの設計・開発・保守",
+            "マイクロサービスアーキテクチャの実装",
+            "パフォーマンス改善と最適化",
+            "技術的課題の解決とアーキテクチャ提案",
+            "ジュニアエンジニアのメンタリング"
+        ],
+        "qualifications": [
+            "バックエンド開発実務経験5年以上",
+            "Go言語での開発経験",
+            "Linux/Unix環境での開発経験"
+        ]
+    }
 
 
 def main():
@@ -172,22 +242,6 @@ def main():
                 
                 st.session_state.user_input_obj = user_input
                 st.session_state.job_requirements_obj = job_requirements
-                
-                # Save form data to database
-                try:
-                    db_manager = FormDataManager()
-                    # Debug: Check if work_experiences is in form_data
-                    if "work_experiences" in form_data["user_input"]:
-                        print(f"DEBUG: work_experiences count: {len(form_data['user_input'].get('work_experiences', []))}")
-                    else:
-                        print("DEBUG: work_experiences NOT in form_data")
-                    db_manager.save_user_input(form_data["user_input"])
-                    db_manager.save_job_requirements(form_data["job_requirements"])
-                except Exception as db_error:
-                    # Database save is optional, don't fail if it errors
-                    print(f"Warning: Could not save form data to database: {db_error}")
-                    import traceback
-                    traceback.print_exc()
                 
             except Exception as e:
                 st.error(f"❌ データ変換エラー: {str(e)}")
