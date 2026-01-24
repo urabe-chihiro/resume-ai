@@ -103,53 +103,10 @@ class AgentOrchestrator:
         })
         results["structure_plan"] = structure_output["structure_plan"]
         
-        # 5. 職務経歴書生成
-        generation_output = self.generation_agent.run({
-            "user_input": user_input_text,
-            "job_requirements": job_requirements.job_description,
-            "company_analysis": results["company_analysis"],
-            "requirements_analysis": results["requirements_analysis"],
-            "structure_plan": results["structure_plan"],
-        })
-        resume_markdown = generation_output["resume_markdown"]
-        
-        # Remove "職務要約" section title if present (content is displayed separately without title)
-        resume_markdown = self._remove_summary_title(resume_markdown)
-        results["resume_markdown"] = resume_markdown
-        
-        # 6. PDF生成用の構造化データ抽出（校閲済みの職務経歴を使用）
+        # 5. PDF生成用の構造化データ抽出（校閲済みの職務経歴を使用）
         results["resume_data"] = self._extract_structured_data(user_input, job_requirements, refined_experiences)
         
         return results
-    
-    def improve_resume(
-        self,
-        current_resume: str,
-        feedback: str,
-        user_input: UserInput,
-        job_requirements: JobRequirements,
-    ) -> str:
-        """Improve resume based on feedback.
-        
-        Args:
-            current_resume: Current resume markdown
-            feedback: Feedback for improvement
-            user_input: User's profile and experience
-            job_requirements: Job requirements and company info
-            
-        Returns:
-            Improved resume markdown
-        """
-        user_input_text = self._format_user_input(user_input)
-        
-        improvement_output = self.improvement_agent.run({
-            "current_resume": current_resume,
-            "feedback": feedback,
-            "user_input": user_input_text,
-            "job_requirements": job_requirements.job_description,
-        })
-        
-        return improvement_output["improved_resume"]
     
     def generate_summary(
         self,
@@ -289,21 +246,6 @@ class AgentOrchestrator:
             parts.append("")
         
         return "\n".join(parts)
-    
-    def _remove_summary_title(self, markdown: str) -> str:
-        """Remove 職務要約 title from markdown while keeping content.
-        
-        Args:
-            markdown: Markdown text
-            
-        Returns:
-            Markdown with 職務要約 title removed
-        """
-        import re
-        # Match patterns like ## 職務要約 or ### 職務要約
-        markdown = re.sub(r'^#{1,6}\s*職務要約\s*\n+', '', markdown, flags=re.MULTILINE)
-        return markdown
-    
     
     def _extract_structured_data(self, user_input: UserInput, job_requirements: JobRequirements, refined_experiences: list = None) -> Dict[str, Any]:
         """Extract structured data from UserInput for PDF generation.
