@@ -31,7 +31,7 @@ def display_structured_preview(resume_data: Dict[str, Any]) -> None:
     
     st.markdown("---")
     
-    # 2. サマリー（職務要約）セクション - LLMで生成されたもの
+    # 2. アピールポイント - LLMで生成されたもの（タイトルなし）
     if resume_data.get("summary"):
         st.markdown(resume_data["summary"])
         st.markdown("")
@@ -89,6 +89,21 @@ def display_structured_preview(resume_data: Dict[str, Any]) -> None:
         
         if resume_data.get("portfolio_url"):
             st.markdown(f"**ポートフォリオ:** [{resume_data['portfolio_url']}]({resume_data['portfolio_url']})")
+    
+    # 5. 職務経歴
+    if resume_data.get("work_experiences") and len(resume_data["work_experiences"]) > 0:
+        st.markdown("---")
+        st.markdown("## 職務経歴")
+        
+        for exp in resume_data["work_experiences"]:
+            if exp.get("company_name"):
+                st.markdown(f"### {exp['company_name']} - {exp.get('position', '')}")
+                st.markdown(f"**期間:** {exp.get('period', '')}")
+                
+                if exp.get("description"):
+                    st.markdown(exp["description"])
+                
+                st.markdown("")
 
 
 def display_results(results: Dict[str, Any], resume_markdown: str) -> None:

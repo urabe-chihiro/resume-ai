@@ -59,10 +59,11 @@ class SkillSheetGenerator:
         self.style_subtitle = ParagraphStyle(
             name='SubtitleStyle',
             fontName=self.font_main,
-            fontSize=10,
-            textColor=self.COLOR_LIGHT_TEXT,
+            fontSize=8,
+            textColor=self.COLOR_TEXT,
             spaceAfter=20,
             leading=12,
+            alignment=TA_RIGHT,  # Right align
         )
         
         # Section header
@@ -122,9 +123,10 @@ class SkillSheetGenerator:
             fontName=self.font_main,
             fontSize=9,
             textColor=self.COLOR_TEXT,
-            spaceAfter=6,
-            leading=11,
-            alignment=TA_JUSTIFY,
+            spaceAfter=8,
+            spaceBefore=0,
+            leading=14,
+            alignment=TA_LEFT,
         )
     
     def markdown_to_pdf(self, markdown_text: str, output_path: str) -> None:
@@ -272,7 +274,7 @@ class SkillSheetGenerator:
             # Content based on section
             elif current_section == 'summary' and stripped and not stripped.startswith('#'):
                 if data['summary']:
-                    data['summary'] += ' ' + stripped
+                    data['summary'] += '\n' + stripped
                 else:
                     data['summary'] = stripped
             
@@ -337,94 +339,150 @@ class SkillSheetGenerator:
         """
         story = []
         
-        # Header with name and contact info
-        name_text = data['name'] or 'Your Name'
+        # 1. 基本情報 (個人情報) - タイトルなし
+        # Header with name and job title
+        name_text = data.get('name') or 'Your Name'
+        job_title = data.get('job_title') or data.get('role') or ''
         
-        # Create header with name
-        story.append(Paragraph(name_text, self.style_name))
+        # Name (same font size as section header - style_section_header)
+        story.append(Paragraph(f"<b>{name_text}</b>", self.style_section_header))
         
-        # Subtitle/contact info
-        subtitle_parts = []
-        if data['role']:
-            subtitle_parts.append(data['role'])
-        if data['email']:
-            subtitle_parts.append(data['email'])
-        if data['phone']:
-            subtitle_parts.append(data['phone'])
+        # Job title, residence, years of experience (same font size as regular text)
+        contact_parts = []
+        if job_title:
+            contact_parts.append(job_title)
+        if data.get('residence'):
+            contact_parts.append(data['residence'] + '在中')
+        if data.get('years_of_experience'):
+            contact_parts.append(f"経験年数: {data['years_of_experience']}年")
         
-        if subtitle_parts:
-            subtitle_text = ' | '.join(subtitle_parts)
-            story.append(Paragraph(subtitle_text, self.style_subtitle))
+        if contact_parts:
+            contact_text = ' | '.join(contact_parts)
+            story.append(Paragraph(contact_text, self.style_subtitle))
         
-        story.append(Spacer(1, 16*mm))
+        story.append(Spacer(1, 12*mm))
         
-        # Skills section with 2-column table layout
-        if data['skills']:
-            story.append(self._create_section_header('スキル'))
+        # 2. 職務要約 (アピールポイント)
+        summary = data.get('summary')
+        if summary:
+            # Skip section header since summary already contains formatting
+            summary_lines = summary.split('\n')
+            for line in summary_lines:
+                line = line.strip()
+                if line:
+                    # Keep the line as-is to preserve formatting like ◉ marks
+                    story.append(Paragraph(line, self.style_summary))
+            story.append(Spacer(1, 12*mm))
+        
+        # 3. スキルセット
+        # Organize skills by category
+        skills = data.get('programming_languages', [])
+        if skills or data.get('frameworks') or data.get('testing_tools') or data.get('design_tools'):
+            story.append(self._create_section_header('スキルセット'))
             
-            # Organize skills into columns
-            # Handle both structured data format (list of dicts) and markdown format (list of strings)
-            skill_items = self._organize_skills(data['skills'])
-            
-            # Create table data
+            # Create table for skills
             skill_table_data = []
-            for category, items in skill_items.items():
-                # Ensure items is a list of strings
-                if isinstance(items, list):
-                    skills_text = ', '.join(str(item) for item in items)
-                else:
-                    skills_text = str(items)
-                    
+            
+            if data.get('programming_languages'):
+                langs = ', '.join(data['programming_languages']) if isinstance(data['programming_languages'], list) else str(data['programming_languages'])
                 skill_table_data.append([
-                    Paragraph(f"<b>{category}</b>", self.style_skill_category),
-                    Paragraph(skills_text, self.style_skill_items),
+                    Paragraph("<b>プログラミング言語</b>", self.style_skill_category),
+                    Paragraph(langs, self.style_skill_items),
                 ])
             
-            # Create skill table
-            skill_table = Table(skill_table_data, colWidths=[45*mm, 135*mm])
-            skill_table.setStyle(TableStyle([
-                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-                ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                ('RIGHTPADDING', (0, 0), (0, -1), 6),
-                ('RIGHTPADDING', (1, 0), (-1, -1), 0),
-                ('TOPPADDING', (0, 0), (-1, -1), 3),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-                ('BORDER', (0, 0), (-1, -1), 0),
-                ('LINEBELOW', (0, 0), (-1, -1), 0.5, self.COLOR_DIVIDER),
-            ]))
-            story.append(skill_table)
-            story.append(Spacer(1, 16*mm))
+            if data.get('frameworks'):
+                fws = ', '.join(data['frameworks']) if isinstance(data['frameworks'], list) else str(data['frameworks'])
+                skill_table_data.append([
+                    Paragraph("<b>フレームワーク</b>", self.style_skill_category),
+                    Paragraph(fws, self.style_skill_items),
+                ])
+            
+            if data.get('testing_tools'):
+                tools = ', '.join(data['testing_tools']) if isinstance(data['testing_tools'], list) else str(data['testing_tools'])
+                skill_table_data.append([
+                    Paragraph("<b>テストツール</b>", self.style_skill_category),
+                    Paragraph(tools, self.style_skill_items),
+                ])
+            
+            if data.get('design_tools'):
+                design = ', '.join(data['design_tools']) if isinstance(data['design_tools'], list) else str(data['design_tools'])
+                skill_table_data.append([
+                    Paragraph("<b>デザインツール</b>", self.style_skill_category),
+                    Paragraph(design, self.style_skill_items),
+                ])
+            
+            if skill_table_data:
+                skill_table = Table(skill_table_data, colWidths=[45*mm, 135*mm])
+                skill_table.setStyle(TableStyle([
+                    ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                    ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                    ('RIGHTPADDING', (0, 0), (0, -1), 6),
+                    ('RIGHTPADDING', (1, 0), (-1, -1), 0),
+                    ('TOPPADDING', (0, 0), (-1, -1), 3),
+                    ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                    ('BORDER', (0, 0), (-1, -1), 0),
+                    ('LINEBELOW', (0, 0), (-1, -1), 0.5, self.COLOR_DIVIDER),
+                ]))
+                story.append(skill_table)
+                story.append(Spacer(1, 12*mm))
         
-        # Summary section
-        if data['summary']:
-            story.append(self._create_section_header('職務要約'))
-            summary_text = ' '.join(data['summary'].split())
-            story.append(Paragraph(summary_text, self.style_summary))
-            story.append(Spacer(1, 16*mm))
+        # 4. 個人開発 (Personal Projects)
+        personal_projects = data.get('personal_projects', [])
+        if personal_projects:
+            story.append(self._create_section_header('個人開発'))
+            
+            for project in personal_projects:
+                if isinstance(project, dict):
+                    title = project.get('title', '')
+                    description = project.get('description', '')
+                    technologies = project.get('technologies', [])
+                    url = project.get('url', '')
+                    
+                    # Project title
+                    if title:
+                        story.append(Paragraph(f"<b>{title}</b>", self.style_job_title))
+                    
+                    # Description
+                    if description:
+                        story.append(Paragraph(description, self.style_job_detail))
+                    
+                    # Technologies
+                    if technologies:
+                        tech_text = ', '.join(technologies) if isinstance(technologies, list) else str(technologies)
+                        story.append(Paragraph(f"<b>技術:</b> {tech_text}", self.style_job_detail))
+                    
+                    # URL
+                    if url:
+                        story.append(Paragraph(f"<b>URL:</b> {url}", self.style_job_detail))
+                    
+                    story.append(Spacer(1, 8*mm))
         
-        # Professional experience section
-        if data['experiences']:
+        # 5. 職務経歴
+        work_experiences = data.get('work_experiences', [])
+        if work_experiences:
             story.append(self._create_section_header('職務経歴'))
             
-            for exp in data['experiences']:
-                if exp['company']:
-                    # Company and position
-                    company_text = exp['company']
-                    if exp.get('position'):
-                        company_text += f" — {exp['position']}"
+            for exp in work_experiences:
+                if isinstance(exp, dict):
+                    company_name = exp.get('company_name', '')
+                    position = exp.get('position', '')
+                    period = exp.get('period', '')
+                    description = exp.get('description', '')
                     
-                    story.append(Paragraph(company_text, self.style_job_title))
+                    # Company and position
+                    if company_name:
+                        company_text = f"{company_name} — {position}" if position else company_name
+                        story.append(Paragraph(f"<b>{company_text}</b>", self.style_job_title))
                     
                     # Period
-                    if exp.get('period'):
-                        story.append(Paragraph(f"期間: {exp['period']}", self.style_job_detail))
+                    if period:
+                        story.append(Paragraph(f"<i>{period}</i>", self.style_job_detail))
                     
-                    # Details as bullet points
-                    for detail in exp.get('details', []):
-                        if detail.strip():
-                            story.append(Paragraph(f"• {detail}", self.style_job_detail))
+                    # Description
+                    if description:
+                        story.append(Paragraph(description, self.style_job_detail))
                     
-                    story.append(Spacer(1, 6*mm))
+                    story.append(Spacer(1, 8*mm))
         
         return story
     
@@ -439,6 +497,15 @@ class SkillSheetGenerator:
         """
         organized = {}
         
+        if not skills:
+            return organized
+        
+        # If skills is a list of simple strings, categorize them
+        if all(isinstance(s, str) for s in skills):
+            # Check if we can categorize based on content
+            organized['スキル'] = skills
+            return organized
+        
         for skill_entry in skills:
             # Handle structured data format: dict with 'category' and 'items'
             if isinstance(skill_entry, dict):
@@ -449,16 +516,17 @@ class SkillSheetGenerator:
                 else:
                     organized[category] = [items]
             # Handle markdown format: string with category:items format
-            elif ':' in skill_entry:
-                parts = skill_entry.split(':', 1)
-                category = parts[0].strip()
-                items = [s.strip() for s in parts[1].split(',')]
-                organized[category] = items
-            else:
-                # Fallback category
-                if 'その他' not in organized:
-                    organized['その他'] = []
-                organized['その他'].append(skill_entry)
+            elif isinstance(skill_entry, str):
+                if ':' in skill_entry:
+                    parts = skill_entry.split(':', 1)
+                    category = parts[0].strip()
+                    items = [s.strip() for s in parts[1].split(',')]
+                    organized[category] = items
+                else:
+                    # Fallback category
+                    if 'スキル' not in organized:
+                        organized['スキル'] = []
+                    organized['スキル'].append(skill_entry)
         
         return organized
     

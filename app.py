@@ -47,6 +47,12 @@ if "user_input_obj" not in st.session_state:
 if "job_requirements_obj" not in st.session_state:
     st.session_state.job_requirements_obj = None
 
+# Initialize form data in session state
+if "form_user_data" not in st.session_state:
+    st.session_state.form_user_data = {}
+if "form_job_data" not in st.session_state:
+    st.session_state.form_job_data = {}
+
 
 def main():
     """Main application function."""
@@ -126,10 +132,12 @@ def main():
                     residence=form_data["user_input"].get("residence"),
                     job_title=form_data["user_input"].get("job_title"),
                     years_of_experience=form_data["user_input"].get("years_of_experience"),
+                    appeal_points=form_data["user_input"].get("appeal_points"),
                     programming_languages=form_data["user_input"].get("programming_languages", []),
                     frameworks=form_data["user_input"].get("frameworks", []),
                     testing_tools=form_data["user_input"].get("testing_tools", []),
                     design_tools=form_data["user_input"].get("design_tools", []),
+                    work_experiences=form_data["user_input"].get("work_experiences", []),
                     personal_projects=form_data["user_input"].get("personal_projects", []),
                     portfolio_url=form_data["user_input"].get("portfolio_url"),
                 )
@@ -150,11 +158,18 @@ def main():
                 # Save form data to database
                 try:
                     db_manager = FormDataManager()
+                    # Debug: Check if work_experiences is in form_data
+                    if "work_experiences" in form_data["user_input"]:
+                        print(f"DEBUG: work_experiences count: {len(form_data['user_input'].get('work_experiences', []))}")
+                    else:
+                        print("DEBUG: work_experiences NOT in form_data")
                     db_manager.save_user_input(form_data["user_input"])
                     db_manager.save_job_requirements(form_data["job_requirements"])
                 except Exception as db_error:
                     # Database save is optional, don't fail if it errors
                     print(f"Warning: Could not save form data to database: {db_error}")
+                    import traceback
+                    traceback.print_exc()
                 
             except Exception as e:
                 st.error(f"❌ データ変換エラー: {str(e)}")

@@ -20,21 +20,42 @@ def render_input_form() -> Dict[str, Any]:
     
     with tab1:
         user_data = _render_user_input_form()
+        # Save to session state
+        st.session_state.form_user_data = user_data
     
     with tab2:
         job_data = _render_job_requirements_form()
+        # Save to session state
+        st.session_state.form_job_data = job_data
     
     return {
-        "user_input": user_data,
-        "job_requirements": job_data,
+        "user_input": st.session_state.form_user_data,
+        "job_requirements": st.session_state.form_job_data,
     }
 
 
 def _render_user_input_form() -> Dict[str, Any]:
     """Render user input form."""
-    # Load previous data from database if available
-    db_manager = FormDataManager()
-    previous_data = db_manager.get_latest_user_input()
+    # First, check if data exists in session state (from current session)
+    if st.session_state.form_user_data:
+        previous_data = st.session_state.form_user_data
+        print(f"DEBUG: Loaded form_user_data from session_state with keys: {list(previous_data.keys())}")
+    else:
+        # If not in session state, load from database (first visit or new session)
+        db_manager = FormDataManager()
+        previous_data = db_manager.get_latest_user_input()
+        
+        # Debug: Print loaded data
+        if previous_data:
+            print(f"DEBUG: Loaded previous_data from database with keys: {list(previous_data.keys())}")
+            if "work_experiences" in previous_data:
+                print(f"DEBUG: work_experiences loaded: {len(previous_data.get('work_experiences', []))} items")
+        else:
+            print("DEBUG: No previous_data found")
+        
+        # Store in session state for future reference within this session
+        if previous_data:
+            st.session_state.form_user_data = previous_data
     
     st.header("基本情報")
     
@@ -68,6 +89,14 @@ def _render_user_input_form() -> Dict[str, Any]:
             value=previous_data.get("years_of_experience", "") if previous_data else ""
         )
     
+    appeal_points = st.text_area(
+        "アピールポイント（あなたの強みや専門性）*",
+        height=100,
+        key="appeal_points",
+        placeholder="例: システムアーキテクチャ設計と大規模システムの運用に15年の経験があり、チーム主導のプロジェクト推進能力に自信があります。マイクロサービス化やスケーラビリティ改善を主導してきました。",
+        value=previous_data.get("appeal_points", "") if previous_data else ""
+    )
+    
     st.markdown("---")
     st.header("スキルセット")
     
@@ -99,6 +128,7 @@ def _render_user_input_form() -> Dict[str, Any]:
             value=", ".join(previous_data.get("design_tools", [])) if previous_data else ""
         )
     
+    
     st.markdown("---")
     st.header("個人開発")
     
@@ -107,7 +137,12 @@ def _render_user_input_form() -> Dict[str, Any]:
     personal_projects = []
     
     for i in range(int(num_projects)):
-        prev_proj = previous_data.get("personal_projects", [])[i] if previous_data and i < len(previous_data.get("personal_projects", [])) else {}
+        # Get previous project data - handle both dict and list formats
+        prev_projs = previous_data.get("personal_projects", []) if previous_data else []
+        if isinstance(prev_projs, list) and i < len(prev_projs):
+            prev_proj = prev_projs[i] if isinstance(prev_projs[i], dict) else {}
+        else:
+            prev_proj = {}
         
         with st.expander(f"プロジェクト {i+1}", expanded=(i==0)):
             title = st.text_input("プロジェクト名", key=f"proj_title_{i}", value=prev_proj.get("title", ""))
@@ -131,6 +166,43 @@ def _render_user_input_form() -> Dict[str, Any]:
                     "url": url if url else None,
                 })
     
+    st.markdown("---")
+    st.header("職務経歴")
+    st.info("求人情報に合わせた経歴を記述してください。古い順から記入してください。")
+    
+    default_num_experiences = len(previous_data.get("work_experiences", [])) if previous_data else 0
+    num_experiences = st.number_input("職務経歴数", min_value=0, max_value=10, value=default_num_experiences, key="num_experiences")
+    work_experiences = []
+    
+    for i in range(int(num_experiences)):
+        # Get previous experience data - handle both dict and list formats
+        prev_exps = previous_data.get("work_experiences", []) if previous_data else []
+        if isinstance(prev_exps, list) and i < len(prev_exps):
+            prev_exp = prev_exps[i] if isinstance(prev_exps[i], dict) else {}
+        else:
+            prev_exp = {}
+        
+        with st.expander(f"職務経歴 {i+1}", expanded=(i==0)):
+            company_name = st.text_input("企業名", key=f"company_{i}", value=prev_exp.get("company_name", ""))
+            position = st.text_input("職位・職種", key=f"position_{i}", placeholder="例: バックエンドエンジニア", value=prev_exp.get("position", ""))
+            period = st.text_input("在職期間", key=f"period_{i}", placeholder="例: 2020年4月～2023年3月", value=prev_exp.get("period", ""))
+            description = st.text_area(
+                "職務内容・成果（求人に合わせて記述してください）",
+                height=100,
+                key=f"exp_desc_{i}",
+                placeholder="例: マイクロサービスアーキテクチャの設計・実装を担当し、レイテンシを30%削減。3名のチームをリード。",
+                value=prev_exp.get("description", "")
+            )
+            
+            # Always add experience if any field has content (not just if all three are filled)
+            if company_name or position or period or description:
+                work_experiences.append({
+                    "company_name": company_name,
+                    "position": position,
+                    "period": period,
+                    "description": description if description else None,
+                })
+    
     portfolio_url = st.text_input(
         "ポートフォリオ・GitHub URL",
         key="portfolio_url",
@@ -143,10 +215,12 @@ def _render_user_input_form() -> Dict[str, Any]:
         "residence": residence,
         "job_title": job_title,
         "years_of_experience": years_of_experience,
+        "appeal_points": appeal_points,
         "programming_languages": [lang.strip() for lang in programming_langs.split(",")] if programming_langs else [],
         "frameworks": [fw.strip() for fw in frameworks.split(",")] if frameworks else [],
         "testing_tools": [tool.strip() for tool in testing_tools.split(",")] if testing_tools else [],
         "design_tools": [tool.strip() for tool in design_tools.split(",")] if design_tools else [],
+        "work_experiences": work_experiences,
         "personal_projects": personal_projects,
         "portfolio_url": portfolio_url,
     }
@@ -154,9 +228,19 @@ def _render_user_input_form() -> Dict[str, Any]:
 
 def _render_job_requirements_form() -> Dict[str, Any]:
     """Render job requirements form."""
-    # Load previous data from database if available
-    db_manager = FormDataManager()
-    previous_data = db_manager.get_latest_job_requirements()
+    # First, check if data exists in session state (from current session)
+    if st.session_state.form_job_data:
+        previous_data = st.session_state.form_job_data
+        print(f"DEBUG: Loaded form_job_data from session_state with keys: {list(previous_data.keys())}")
+    else:
+        # If not in session state, load from database (first visit or new session)
+        db_manager = FormDataManager()
+        previous_data = db_manager.get_latest_job_requirements()
+        
+        # Store in session state for future reference within this session
+        if previous_data:
+            st.session_state.form_job_data = previous_data
+            print(f"DEBUG: Loaded job_requirements from database")
     
     st.header("企業情報")
     
@@ -195,7 +279,7 @@ def _render_job_requirements_form() -> Dict[str, Any]:
     
     job_title = st.text_input(
         "職種 *", 
-        key="job_title",
+        key="job_requirements_job_title",
         value=previous_data.get("job_title", "") if previous_data else ""
     )
     job_description = st.text_area(

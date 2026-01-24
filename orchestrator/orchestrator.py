@@ -7,11 +7,13 @@ from agents import (
     ResumeStructureAgent,
     ResumeGenerationAgent,
     FeedbackImprovementAgent,
+    SummaryGenerationAgent,
+    WorkExperienceRefinementAgent,
 )
 from models import UserInput, JobRequirements
 
 # オーケストレーター = 指揮者
-# 5つの独立したエージェントを「指揮」して、順番に実行させ、結果を連結させて最終成果物を生成するクラス
+# 複数の独立したエージェントを「指揮」して、順番に実行させ、結果を連結させて最終成果物を生成するクラス
 class AgentOrchestrator:
     """Orchestrates the agent workflow for resume generation."""
     
@@ -22,6 +24,8 @@ class AgentOrchestrator:
         self.structure_agent = ResumeStructureAgent()
         self.generation_agent = ResumeGenerationAgent()
         self.improvement_agent = FeedbackImprovementAgent()
+        self.summary_agent = SummaryGenerationAgent()
+        self.work_experience_refinement_agent = WorkExperienceRefinementAgent()
     
     def generate_resume(
         self,
@@ -54,7 +58,43 @@ class AgentOrchestrator:
         })
         results["requirements_analysis"] = requirements_output["requirements"]
         
-        # 3. 職務経歴書構成計画
+        # 3. 職務経歴の校閲（求人に合わせて職務内容を修正）
+        refined_experiences = []
+        try:
+            if user_input.work_experiences:
+                print(f"[Orchestrator] Step 3: Refining {len(user_input.work_experiences)} work experiences")
+                work_experiences_text = self._format_work_experiences(user_input)
+                work_experience_refinement_output = self.work_experience_refinement_agent.run({
+                    "work_experiences": work_experiences_text,
+                    "job_title": job_requirements.job_title,
+                    "job_requirements": job_requirements.job_description,
+                    "requirements_analysis": results["requirements_analysis"],
+                    "company_analysis": results["company_analysis"],
+                })
+                refined_experiences = work_experience_refinement_output.get("refined_experiences", [])
+                print(f"[Orchestrator] Agent returned: {len(refined_experiences)} refined experiences")
+                
+                # Log details about what we got back
+                if refined_experiences:
+                    print(f"[Orchestrator] First refined experience keys: {refined_experiences[0].keys() if isinstance(refined_experiences[0], dict) else 'Not a dict'}")
+                    if isinstance(refined_experiences[0], dict) and "description" in refined_experiences[0]:
+                        print(f"[Orchestrator] First refined description (first 100 chars): {refined_experiences[0]['description'][:100]}")
+                else:
+                    print("[Orchestrator] No refined experiences - will use original")
+                
+                print(f"[Orchestrator] Refinement complete: {len(refined_experiences)} refined experiences returned")
+            else:
+                print("[Orchestrator] Step 3: No work experiences to refine")
+        except Exception as e:
+            # If refinement fails, just use empty list (original will be used in _extract_structured_data)
+            print(f"[Orchestrator] Warning: Work experience refinement failed: {e}")
+            import traceback
+            traceback.print_exc()
+            refined_experiences = []
+        
+        results["refined_work_experiences"] = refined_experiences
+        
+        # 4. 職務経歴書構成計画
         user_input_text = self._format_user_input(user_input)
         structure_output = self.structure_agent.run({
             "user_experience": user_input_text,
@@ -63,7 +103,7 @@ class AgentOrchestrator:
         })
         results["structure_plan"] = structure_output["structure_plan"]
         
-        # 4. 職務経歴書生成
+        # 5. 職務経歴書生成
         generation_output = self.generation_agent.run({
             "user_input": user_input_text,
             "job_requirements": job_requirements.job_description,
@@ -71,10 +111,14 @@ class AgentOrchestrator:
             "requirements_analysis": results["requirements_analysis"],
             "structure_plan": results["structure_plan"],
         })
-        results["resume_markdown"] = generation_output["resume_markdown"]
+        resume_markdown = generation_output["resume_markdown"]
         
-        # 5. PDF生成用の構造化データ抽出
-        results["resume_data"] = self._extract_structured_data(user_input, job_requirements)
+        # Remove "職務要約" section title if present (content is displayed separately without title)
+        resume_markdown = self._remove_summary_title(resume_markdown)
+        results["resume_markdown"] = resume_markdown
+        
+        # 6. PDF生成用の構造化データ抽出（校閲済みの職務経歴を使用）
+        results["resume_data"] = self._extract_structured_data(user_input, job_requirements, refined_experiences)
         
         return results
     
@@ -125,14 +169,21 @@ class AgentOrchestrator:
         Returns:
             Generated summary text
         """
-        from prompts import SUMMARY_GENERATION_PROMPT
-        from langchain_openai import ChatOpenAI
-        
         # Format the input data
         programming_languages = ", ".join(user_input.programming_languages) if user_input.programming_languages else "記載なし"
         frameworks = ", ".join(user_input.frameworks) if user_input.frameworks else "記載なし"
         testing_tools = ", ".join(user_input.testing_tools) if user_input.testing_tools else "記載なし"
         design_tools = ", ".join(user_input.design_tools) if user_input.design_tools else "記載なし"
+        
+        work_experiences = ""
+        if user_input.work_experiences:
+            for exp in user_input.work_experiences:
+                work_experiences += f"\n【{exp.company_name} - {exp.position}】\n"
+                work_experiences += f"期間: {exp.period}\n"
+                if exp.description:
+                    work_experiences += f"{exp.description}\n"
+        else:
+            work_experiences = "記載なし"
         
         personal_projects = ""
         if user_input.personal_projects:
@@ -143,26 +194,20 @@ class AgentOrchestrator:
         else:
             personal_projects = "記載なし"
         
-        user_info = self._format_user_input(user_input)
+        # Use SummaryGenerationAgent to generate summary
+        summary_output = self.summary_agent.run({
+            "appeal_points": user_input.appeal_points or "スキルシートを参照",
+            "work_experiences": work_experiences,
+            "programming_languages": programming_languages,
+            "frameworks": frameworks,
+            "testing_tools": testing_tools,
+            "design_tools": design_tools,
+            "personal_projects": personal_projects,
+            "company_analysis": company_analysis,
+            "requirements_analysis": requirements_analysis,
+        })
         
-        # Format the prompt
-        prompt = SUMMARY_GENERATION_PROMPT.format(
-            appeal_points=user_input.job_title or "スキルシートを参照",
-            programming_languages=programming_languages,
-            frameworks=frameworks,
-            testing_tools=testing_tools,
-            design_tools=design_tools,
-            personal_projects=personal_projects,
-            work_experiences=user_info,
-            requirements_analysis=requirements_analysis,
-            company_analysis=company_analysis,
-        )
-        
-        # Generate summary using LLM
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
-        response = llm.invoke(prompt)
-        
-        return response.content
+        return summary_output["summary"]
     
     def _format_company_info(self, company_info) -> str:
         """Format company info for agents."""
@@ -222,26 +267,83 @@ class AgentOrchestrator:
         
         return "\n".join(parts)
     
-    def _extract_structured_data(self, user_input: UserInput, job_requirements: JobRequirements) -> Dict[str, Any]:
+    def _format_work_experiences(self, user_input: UserInput) -> str:
+        """Format work experiences for refinement agent.
+        
+        Args:
+            user_input: User's profile and experience
+            
+        Returns:
+            Formatted work experiences string
+        """
+        if not user_input.work_experiences:
+            return "記載なし"
+        
+        parts = []
+        for exp in user_input.work_experiences:
+            parts.append(f"企業名: {exp.company_name}")
+            parts.append(f"職位: {exp.position}")
+            parts.append(f"期間: {exp.period}")
+            if exp.description:
+                parts.append(f"職務内容・成果:\n{exp.description}")
+            parts.append("")
+        
+        return "\n".join(parts)
+    
+    def _remove_summary_title(self, markdown: str) -> str:
+        """Remove 職務要約 title from markdown while keeping content.
+        
+        Args:
+            markdown: Markdown text
+            
+        Returns:
+            Markdown with 職務要約 title removed
+        """
+        import re
+        # Match patterns like ## 職務要約 or ### 職務要約
+        markdown = re.sub(r'^#{1,6}\s*職務要約\s*\n+', '', markdown, flags=re.MULTILINE)
+        return markdown
+    
+    
+    def _extract_structured_data(self, user_input: UserInput, job_requirements: JobRequirements, refined_experiences: list = None) -> Dict[str, Any]:
         """Extract structured data from UserInput for PDF generation.
         
         Args:
             user_input: User's profile and experience
             job_requirements: Job requirements and company info
+            refined_experiences: Refined work experiences from refinement agent
             
         Returns:
             Dictionary with structured resume data for data_to_pdf()
         """
+        # Use refined experiences if available, otherwise use original
+        if refined_experiences:
+            work_exp_list = refined_experiences
+        else:
+            work_exp_list = [
+                {
+                    "company_name": exp.company_name,
+                    "position": exp.position,
+                    "period": exp.period,
+                    "description": exp.description,
+                }
+                for exp in user_input.work_experiences
+            ]
+        
         # Build structured data
         structured_data = {
             "name": user_input.name,
             "residence": user_input.residence or "",
             "job_title": user_input.job_title or "",
+            "role": job_requirements.job_title or "",  # Role is the target job title
             "years_of_experience": user_input.years_of_experience or "",
+            "email": "",  # Email not stored in UserInput
+            "phone": "",  # Phone not stored in UserInput
             "programming_languages": user_input.programming_languages,
             "frameworks": user_input.frameworks,
             "testing_tools": user_input.testing_tools,
             "design_tools": user_input.design_tools,
+            "work_experiences": work_exp_list,
             "personal_projects": [
                 {
                     "title": proj.title,

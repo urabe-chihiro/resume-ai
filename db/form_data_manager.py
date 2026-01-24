@@ -30,19 +30,72 @@ class FormDataManager:
                 CREATE TABLE IF NOT EXISTS user_input (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     name TEXT NOT NULL,
-                    email TEXT NOT NULL,
-                    phone TEXT,
-                    summary TEXT,
-                    work_experiences TEXT NOT NULL,
-                    education TEXT NOT NULL,
-                    skills TEXT NOT NULL,
-                    certifications TEXT NOT NULL,
-                    languages TEXT NOT NULL,
+                    residence TEXT,
+                    job_title TEXT,
+                    years_of_experience TEXT,
+                    appeal_points TEXT,
+                    programming_languages TEXT,
+                    frameworks TEXT,
+                    testing_tools TEXT,
+                    design_tools TEXT,
+                    personal_projects TEXT,
+                    portfolio_url TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     hash TEXT UNIQUE NOT NULL
                 )
             """)
+            
+            # Add new columns if they don't exist (for migration from old schema)
+            try:
+                cursor.execute("ALTER TABLE user_input ADD COLUMN job_title TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            
+            try:
+                cursor.execute("ALTER TABLE user_input ADD COLUMN residence TEXT")
+            except sqlite3.OperationalError:
+                pass  # Column already exists
+            
+            try:
+                cursor.execute("ALTER TABLE user_input ADD COLUMN appeal_points TEXT")
+            except sqlite3.OperationalError:
+                pass
+            
+            try:
+                cursor.execute("ALTER TABLE user_input ADD COLUMN programming_languages TEXT")
+            except sqlite3.OperationalError:
+                pass
+            
+            try:
+                cursor.execute("ALTER TABLE user_input ADD COLUMN frameworks TEXT")
+            except sqlite3.OperationalError:
+                pass
+            
+            try:
+                cursor.execute("ALTER TABLE user_input ADD COLUMN testing_tools TEXT")
+            except sqlite3.OperationalError:
+                pass
+            
+            try:
+                cursor.execute("ALTER TABLE user_input ADD COLUMN design_tools TEXT")
+            except sqlite3.OperationalError:
+                pass
+            
+            try:
+                cursor.execute("ALTER TABLE user_input ADD COLUMN personal_projects TEXT")
+            except sqlite3.OperationalError:
+                pass
+            
+            try:
+                cursor.execute("ALTER TABLE user_input ADD COLUMN portfolio_url TEXT")
+            except sqlite3.OperationalError:
+                pass
+            
+            try:
+                cursor.execute("ALTER TABLE user_input ADD COLUMN work_experiences TEXT")
+            except sqlite3.OperationalError:
+                pass
             
             # Job requirements data table
             cursor.execute("""
@@ -108,19 +161,23 @@ class FormDataManager:
             try:
                 cursor.execute("""
                     INSERT INTO user_input 
-                    (name, email, phone, summary, work_experiences, education, 
-                     skills, certifications, languages, hash)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    (name, residence, job_title, years_of_experience, appeal_points,
+                     programming_languages, frameworks, testing_tools, design_tools,
+                     work_experiences, personal_projects, portfolio_url, hash)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """, (
                     user_data.get("name", ""),
-                    user_data.get("email", ""),
-                    user_data.get("phone"),
-                    user_data.get("summary"),
+                    user_data.get("residence", ""),
+                    user_data.get("job_title", ""),
+                    user_data.get("years_of_experience", ""),
+                    user_data.get("appeal_points", ""),
+                    json.dumps(user_data.get("programming_languages", [])),
+                    json.dumps(user_data.get("frameworks", [])),
+                    json.dumps(user_data.get("testing_tools", [])),
+                    json.dumps(user_data.get("design_tools", [])),
                     json.dumps(user_data.get("work_experiences", [])),
-                    json.dumps(user_data.get("education", [])),
-                    json.dumps(user_data.get("skills", [])),
-                    json.dumps(user_data.get("certifications", [])),
-                    json.dumps(user_data.get("languages", [])),
+                    json.dumps(user_data.get("personal_projects", [])),
+                    user_data.get("portfolio_url", ""),
                     data_hash
                 ))
                 conn.commit()
@@ -184,8 +241,9 @@ class FormDataManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT id, name, email, phone, summary, work_experiences, 
-                       education, skills, certifications, languages
+                SELECT id, name, residence, job_title, years_of_experience, appeal_points,
+                       programming_languages, frameworks, testing_tools, design_tools,
+                       work_experiences, personal_projects, portfolio_url
                 FROM user_input
                 ORDER BY updated_at DESC
                 LIMIT 1
@@ -198,14 +256,17 @@ class FormDataManager:
             return {
                 "id": row[0],
                 "name": row[1],
-                "email": row[2],
-                "phone": row[3],
-                "summary": row[4],
-                "work_experiences": json.loads(row[5]),
-                "education": json.loads(row[6]),
-                "skills": json.loads(row[7]),
-                "certifications": json.loads(row[8]),
-                "languages": json.loads(row[9]),
+                "residence": row[2],
+                "job_title": row[3],
+                "years_of_experience": row[4],
+                "appeal_points": row[5],
+                "programming_languages": json.loads(row[6]) if row[6] else [],
+                "frameworks": json.loads(row[7]) if row[7] else [],
+                "testing_tools": json.loads(row[8]) if row[8] else [],
+                "design_tools": json.loads(row[9]) if row[9] else [],
+                "work_experiences": json.loads(row[10]) if row[10] else [],
+                "personal_projects": json.loads(row[11]) if row[11] else [],
+                "portfolio_url": row[12],
             }
     
     def get_latest_job_requirements(self) -> Optional[Dict[str, Any]]:
@@ -257,8 +318,9 @@ class FormDataManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT id, name, email, phone, summary, work_experiences, 
-                       education, skills, certifications, languages
+                SELECT id, name, residence, job_title, years_of_experience, appeal_points,
+                       programming_languages, frameworks, testing_tools, design_tools,
+                       personal_projects, portfolio_url
                 FROM user_input
                 WHERE id = ?
             """, (user_id,))
@@ -270,14 +332,16 @@ class FormDataManager:
             return {
                 "id": row[0],
                 "name": row[1],
-                "email": row[2],
-                "phone": row[3],
-                "summary": row[4],
-                "work_experiences": json.loads(row[5]),
-                "education": json.loads(row[6]),
-                "skills": json.loads(row[7]),
-                "certifications": json.loads(row[8]),
-                "languages": json.loads(row[9]),
+                "residence": row[2],
+                "job_title": row[3],
+                "years_of_experience": row[4],
+                "appeal_points": row[5],
+                "programming_languages": json.loads(row[6]) if row[6] else [],
+                "frameworks": json.loads(row[7]) if row[7] else [],
+                "testing_tools": json.loads(row[8]) if row[8] else [],
+                "design_tools": json.loads(row[9]) if row[9] else [],
+                "personal_projects": json.loads(row[10]) if row[10] else [],
+                "portfolio_url": row[11],
             }
     
     def list_all_user_inputs(self, limit: int = 10) -> list:
@@ -292,7 +356,7 @@ class FormDataManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT id, name, email, created_at, updated_at
+                SELECT id, name, residence, job_title, created_at, updated_at
                 FROM user_input
                 ORDER BY updated_at DESC
                 LIMIT ?
@@ -303,9 +367,10 @@ class FormDataManager:
                 records.append({
                     "id": row[0],
                     "name": row[1],
-                    "email": row[2],
-                    "created_at": row[3],
-                    "updated_at": row[4],
+                    "residence": row[2],
+                    "job_title": row[3],
+                    "created_at": row[4],
+                    "updated_at": row[5],
                 })
             
             return records
