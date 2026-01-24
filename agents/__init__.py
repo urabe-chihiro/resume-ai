@@ -8,6 +8,8 @@ from .resume_generation_agent import ResumeGenerationAgent
 from .feedback_improvement_agent import FeedbackImprovementAgent
 from .summary_generation_agent import SummaryGenerationAgent
 from .work_experience_refinement_agent import WorkExperienceRefinementAgent
+from .improvement_suggestion_agent import ImprovementSuggestionAgent
+from .supplement_integration_agent import SupplementIntegrationAgent
 
 __all__ = [
     "BaseAgent",
@@ -18,4 +20,6 @@ __all__ = [
     "FeedbackImprovementAgent",
     "SummaryGenerationAgent",
     "WorkExperienceRefinementAgent",
+    "ImprovementSuggestionAgent",
+    "SupplementIntegrationAgent",
 ]

@@ -6,6 +6,8 @@ from .resume_structure import RESUME_STRUCTURE_PROMPT
 from .resume_generation import RESUME_GENERATION_PROMPT, SUMMARY_GENERATION_PROMPT
 from .feedback_improvement import FEEDBACK_IMPROVEMENT_PROMPT
 from .work_experience_refinement import WORK_EXPERIENCE_REFINEMENT_PROMPT
+from .improvement_suggestion import IMPROVEMENT_SUGGESTION_PROMPT
+from .supplement_integration import SUPPLEMENT_INTEGRATION_PROMPT
 
 # ___all___ 公開 API
 __all__ = [
@@ -16,4 +18,6 @@ __all__ = [
     "SUMMARY_GENERATION_PROMPT",
     "FEEDBACK_IMPROVEMENT_PROMPT",
     "WORK_EXPERIENCE_REFINEMENT_PROMPT",
+    "IMPROVEMENT_SUGGESTION_PROMPT",
+    "SUPPLEMENT_INTEGRATION_PROMPT",
 ]

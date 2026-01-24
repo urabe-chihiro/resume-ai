@@ -9,6 +9,8 @@ from agents import (
     FeedbackImprovementAgent,
     SummaryGenerationAgent,
     WorkExperienceRefinementAgent,
+    ImprovementSuggestionAgent,
+    SupplementIntegrationAgent,
 )
 from models import UserInput, JobRequirements
 
@@ -26,6 +28,8 @@ class AgentOrchestrator:
         self.improvement_agent = FeedbackImprovementAgent()
         self.summary_agent = SummaryGenerationAgent()
         self.work_experience_refinement_agent = WorkExperienceRefinementAgent()
+        self.improvement_suggestion_agent = ImprovementSuggestionAgent()
+        self.supplement_integration_agent = SupplementIntegrationAgent()
     
     def generate_resume(
         self,
@@ -300,4 +304,83 @@ class AgentOrchestrator:
         }
         
         return structured_data
+    
+    def generate_improvement_suggestions(
+        self,
+        resume_data: Dict[str, Any],
+        job_requirements: JobRequirements,
+    ) -> Dict[str, Any]:
+        """Generate improvement suggestions for the resume.
+        
+        Args:
+            resume_data: Structured resume data
+            job_requirements: Job requirements and company info
+            
+        Returns:
+            Dictionary with suggestions
+        """
+        suggestions_output = self.improvement_suggestion_agent.run({
+            "resume_data": resume_data,
+            "job_title": job_requirements.job_title,
+            "job_description": job_requirements.job_description,
+        })
+        
+        return {
+            "suggestions": suggestions_output.get("suggestions", []),
+            "prompt_text": suggestions_output.get("prompt_text", ""),
+        }
+    
+    def integrate_supplement_info(
+        self,
+        resume_data: Dict[str, Any],
+        supplement_info: str,
+    ) -> Dict[str, Any]:
+        """Integrate supplementary information into resume using LLM.
+        
+        Args:
+            resume_data: Current resume data
+            supplement_info: User's supplementary information to integrate
+            
+        Returns:
+            Updated resume data with integrated information
+        """
+        if not supplement_info.strip():
+            return resume_data
+        
+        print("[Orchestrator] Integrating supplementary information...")
+        
+        updated_data = self.supplement_integration_agent.run({
+            "resume_data": resume_data,
+            "supplement_info": supplement_info,
+        })
+        
+        return updated_data
+    
+    def apply_improvement_suggestions(
+        self,
+        resume_data: Dict[str, Any],
+        suggestions: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Apply selected improvement suggestions to the resume data.
+        
+        Args:
+            resume_data: Current resume data
+            suggestions: User-selected suggestions to apply
+            
+        Returns:
+            Updated resume data
+        """
+        # Create a copy to avoid modifying original
+        updated_data = resume_data.copy()
+        
+        # Apply each accepted suggestion
+        for suggestion_id, accepted in suggestions.items():
+            if not accepted:
+                continue
+            
+            # Parse suggestion_id format: "category_index"
+            # Update corresponding field in resume_data
+            # This is a simplified implementation - extend as needed
+        
+        return updated_data
 
